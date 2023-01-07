@@ -8,7 +8,7 @@
    [clojure.tools.logging :as log])
   (:gen-class))
 
-(def clients (atom '()))
+(def clients (atom #{}))
 
 (defn wrap-duplex-stream
   [protocol s]
@@ -20,10 +20,13 @@
   [client-stream]
   (swap! clients conj client-stream))
 
-(defn echo-handler
-  [input-stream info]
-  (append-client input-stream)
-  (stream/map (fn [a] (println a) a) input-stream))
+(defn fast-echo-handler
+  [f]
+  (fn [input-stream info]
+    (append-client input-stream)
+    (stream/connect
+     (stream/map f input-stream)
+     input-stream)))
 
 (defn start-server
   [handler config]
@@ -35,11 +38,6 @@
 (defn -main
   [& args]
   (let [config {:port 10000}
-        server (start-server echo-handler config)]
+        server (start-server (fast-echo-handler identity) config)]
     (log/info "Started TCP Server at port" (:port config))
     server))
-
-(defn client
-  [host port]
-  (d/chain (tcp/client {:host host, :port port})
-           #(wrap-duplex-stream protocol %)))
